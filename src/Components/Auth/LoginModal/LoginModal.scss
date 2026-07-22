@@ -1,0 +1,130 @@
+@use '../../../Styles/variables' as *;
+
+.login-modal__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: $z-overlay;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba($black, 0.75);
+  backdrop-filter: blur(6px);
+}
+
+.login-modal__content {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  padding: 32px 28px;
+  background: $dark-surface;
+  border: 1px solid rgba($primary, 0.35);
+  border-radius: $radius;
+  box-shadow: $shadow-md;
+}
+
+.login-modal__close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  color: $text-muted;
+  border-radius: $radius-xs;
+  transition: color 0.2s ease, background 0.2s ease;
+
+  &:hover {
+    color: $white;
+    background: rgba($white, 0.08);
+  }
+}
+
+.login-modal__title {
+  margin: 0 0 8px;
+  font-size: 1.5rem;
+  font-weight: $fw-semibold;
+  color: $heading;
+}
+
+.login-modal__subtitle {
+  margin: 0 0 24px;
+  font-size: 0.9rem;
+  color: $text-muted;
+}
+
+.login-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.login-modal__label {
+  font-size: 0.85rem;
+  font-weight: $fw-medium;
+  color: $text-muted;
+}
+
+.login-modal__input {
+  width: 100%;
+  padding: 12px 14px;
+  color: $text;
+  background: rgba($white, 0.06);
+  border: 1px solid rgba($primary, 0.25);
+  border-radius: $radius-sm;
+  outline: none;
+  transition: border-color 0.2s ease;
+
+  &:focus {
+    border-color: $primary;
+  }
+
+  &::placeholder {
+    color: rgba($text-muted, 0.7);
+  }
+}
+
+.login-modal__error {
+  margin: -8px 0 12px;
+  font-size: 0.82rem;
+  color: #ff8a8a;
+}
+
+.login-modal__submit {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px 16px;
+  font-weight: $fw-semibold;
+  color: $black;
+  background: $primary;
+  border-radius: $radius-sm;
+  transition: background 0.2s ease, opacity 0.2s ease;
+
+  &:hover:not(:disabled) {
+    background: $primary-dark;
+  }
+
+  &:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+}
+
+.login-modal__password-wrap {
+  position: relative;
+}
+
+.login-modal__toggle-password {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  color: $text-muted;
+
+  &:hover {
+    color: $primary;
+  }
+}
