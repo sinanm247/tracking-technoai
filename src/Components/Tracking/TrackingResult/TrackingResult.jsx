@@ -1,12 +1,26 @@
+import { useState } from 'react';
 import { formatLineCount, formatPoDate } from '../../../Utils/formatters';
+import ShipmentTrackingLink from '../../Common/ShipmentTrackingLink/ShipmentTrackingLink';
+import SubscribeUpdatesModal from '../SubscribeUpdatesModal/SubscribeUpdatesModal';
 import './TrackingResult.scss';
 
 export default function TrackingResult({ order }) {
+  const [isSubscribeOpen, setIsSubscribeOpen] = useState(false);
+
   return (
     <section className="tracking-result" aria-labelledby="tracking-result-title">
-      <h2 id="tracking-result-title" className="tracking-result__po-number">
-        PO number: {order.poNumber}
-      </h2>
+      <div className="tracking-result__header">
+        <h2 id="tracking-result-title" className="tracking-result__po-number">
+          PO number: {order.poNumber}
+        </h2>
+        <button
+          type="button"
+          className="tracking-result__updates-btn"
+          onClick={() => setIsSubscribeOpen(true)}
+        >
+          Get Updates
+        </button>
+      </div>
 
       <div className="tracking-result__status">
         <p className="tracking-result__status-label">
@@ -40,6 +54,7 @@ export default function TrackingResult({ order }) {
               <th scope="col">Qty</th>
               <th scope="col">Status</th>
               <th scope="col">ETA</th>
+              <th scope="col">Tracking</th>
             </tr>
           </thead>
           <tbody>
@@ -50,6 +65,12 @@ export default function TrackingResult({ order }) {
                 <td>{item.quantity}</td>
                 <td>{item.status}</td>
                 <td>{formatPoDate(item.eta)}</td>
+                <td>
+                  <ShipmentTrackingLink
+                    value={item.shipmentTrackingLink}
+                    className="tracking-result__tracking-link"
+                  />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -59,6 +80,12 @@ export default function TrackingResult({ order }) {
       <p className="tracking-result__po-closing-date">
         PO Closing date: {formatPoDate(order.poClosingDate)}
       </p>
+
+      <SubscribeUpdatesModal
+        poNumber={order.poNumber}
+        isOpen={isSubscribeOpen}
+        onClose={() => setIsSubscribeOpen(false)}
+      />
     </section>
   );
 }

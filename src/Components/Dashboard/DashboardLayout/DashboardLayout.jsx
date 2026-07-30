@@ -1,4 +1,4 @@
-import { MdSpaceDashboard, MdInventory2, MdPeople, MdPerson, MdLock } from 'react-icons/md';
+import { MdSpaceDashboard, MdInventory2, MdPeople, MdPerson, MdLock, MdAssessment } from 'react-icons/md';
 import { TbLogout } from 'react-icons/tb';
 import { useAuth } from '../../../Context/AuthContext';
 import { ADMIN_ROLES } from '../../../Constants/roles';
@@ -23,6 +23,14 @@ const ADMIN_MENU = [
     id: 'users',
     name: 'Users',
     icon: MdPeople,
+  },
+];
+
+const REPORTING_MENU = [
+  {
+    id: 'reporting',
+    name: 'Reporting',
+    icon: MdAssessment,
   },
 ];
 
@@ -73,6 +81,7 @@ export default function DashboardLayout({
         <aside className="dashboard-layout__sidebar">
           <nav className="dashboard-layout__nav" aria-label="Dashboard">
             {mainMenuItems.map((item) => renderNavItem(item, activeMenu, onMenuChange))}
+            {REPORTING_MENU.map((item) => renderNavItem(item, activeMenu, onMenuChange))}
           </nav>
 
           <div className="dashboard-layout__sidebar-footer">

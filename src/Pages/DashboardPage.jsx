@@ -4,6 +4,7 @@ import DashboardLayout from '../Components/Dashboard/DashboardLayout/DashboardLa
 import DashboardOverview from '../Components/Dashboard/DashboardOverview/DashboardOverview';
 import UserManagement from '../Components/Dashboard/UserManagement/UserManagement';
 import PurchaseOrders from '../Components/Dashboard/PurchaseOrders/PurchaseOrders';
+import Reporting from '../Components/Dashboard/Reporting/Reporting';
 import ProfileSettings from '../Components/Dashboard/ProfileSettings/ProfileSettings';
 import ChangePassword from '../Components/Dashboard/ChangePassword/ChangePassword';
 
@@ -25,6 +26,8 @@ export default function DashboardPage() {
         return <UserManagement />;
       case 'purchase-orders':
         return <PurchaseOrders />;
+      case 'reporting':
+        return <Reporting />;
       case 'profile':
         return <ProfileSettings />;
       case 'password':

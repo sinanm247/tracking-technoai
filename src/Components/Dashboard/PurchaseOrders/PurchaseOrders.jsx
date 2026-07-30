@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { IoMdClose } from 'react-icons/io';
 import { toast } from 'react-toastify';
-import { LINE_STATUSES, PO_STATUSES } from '../../../Constants/purchaseOrders';
+import { LINE_STATUSES, PO_STATUSES, SALES_PERSON_OPTIONS, LINE_CURRENCIES } from '../../../Constants/purchaseOrders';
 import { ADMIN_ROLES, EDIT_ROLES } from '../../../Constants/roles';
 import { useAuth } from '../../../Context/AuthContext';
 import {
@@ -18,7 +18,17 @@ import {
 import ConfirmToast from '../../../Design/ConfirmToast/ConfirmToast';
 import ServerErrorState from '../../Common/ServerErrorState/ServerErrorState';
 import { getFriendlyErrorMessage } from '../../../Api/api';
-import { formatPoDate, formatRelativeActivityTime, toDateInputValue, toIsoDate } from '../../../Utils/formatters';
+import {
+  formatPoDate,
+  formatRelativeActivityTime,
+  isValidEmail,
+  toDateInputValue,
+  toIsoDate,
+} from '../../../Utils/formatters';
+import PoDateInput from './PoDateInput';
+import PoFilters from '../PoFilters/PoFilters';
+import { buildPoFilterParams, INITIAL_PO_FILTERS } from '../../../Utils/poFilters';
+import ShipmentTrackingLink from '../../Common/ShipmentTrackingLink/ShipmentTrackingLink';
 import './PurchaseOrders.scss';
 
 const PANEL_CLOSE_MS = 320;
@@ -29,10 +39,11 @@ const INITIAL_PO_FORM = {
   soNumber: '',
   poDate: '',
   paymentTerms: '',
-  plannedPoClosingDate: '',
   overallPoEta: '',
   clientName: '',
   salesPerson: '',
+  contactPerson: '',
+  contactPersonEmail: '',
   subject: '',
   internalNotes: '',
 };
@@ -42,9 +53,26 @@ const EMPTY_LINE = {
   description: '',
   quantity: '',
   unitPrice: '',
+  currency: 'USD',
   status: 'Processing',
   eta: '',
   internalRemarks: '',
+  shipmentTrackingLink: '',
+};
+
+const validateLineFields = (line) => {
+  const errors = {};
+  if (!line.lineNumber) errors.lineNumber = 'Line number is required';
+  if (line.quantity === '' || Number(line.quantity) < 0) {
+    errors.quantity = 'Valid quantity is required';
+  }
+  if (line.unitPrice === '' || Number(line.unitPrice) < 0) {
+    errors.unitPrice = 'Valid unit price is required';
+  }
+  if (!line.currency) errors.currency = 'Currency is required';
+  if (!line.status) errors.status = 'Status is required';
+  if (!line.eta) errors.eta = 'ETA is required';
+  return errors;
 };
 
 const poFormFromRecord = (po) => ({
@@ -52,10 +80,11 @@ const poFormFromRecord = (po) => ({
   soNumber: po.soNumber || '',
   poDate: toDateInputValue(po.poDate),
   paymentTerms: po.paymentTerms || '',
-  plannedPoClosingDate: toDateInputValue(po.plannedPoClosingDate),
   overallPoEta: toDateInputValue(po.overallPoEta),
   clientName: po.clientName || '',
   salesPerson: po.salesPerson || '',
+  contactPerson: po.contactPerson || '',
+  contactPersonEmail: po.contactPersonEmail || '',
   subject: po.subject || '',
   internalNotes: po.internalNotes || '',
 });
@@ -65,19 +94,23 @@ const lineFormFromRecord = (line) => ({
   description: line.description || '',
   quantity: String(line.quantity ?? ''),
   unitPrice: String(line.unitPrice ?? ''),
+  currency: line.currency || 'USD',
   status: line.status || 'Processing',
   eta: toDateInputValue(line.eta),
   internalRemarks: line.internalRemarks || '',
+  shipmentTrackingLink: line.shipmentTrackingLink || '',
 });
 
 const buildLinePayload = (line) => ({
   lineNumber: Number(line.lineNumber),
   description: line.description.trim(),
   quantity: Number(line.quantity),
-  unitPrice: line.unitPrice !== '' ? Number(line.unitPrice) : 0,
+  unitPrice: Number(line.unitPrice),
+  currency: line.currency,
   status: line.status,
-  eta: line.eta ? toIsoDate(line.eta) : undefined,
+  eta: toIsoDate(line.eta),
   internalRemarks: line.internalRemarks?.trim() || '',
+  shipmentTrackingLink: line.shipmentTrackingLink?.trim() || '',
 });
 
 export default function PurchaseOrders() {
@@ -89,9 +122,9 @@ export default function PurchaseOrders() {
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState(INITIAL_PO_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState(INITIAL_PO_FILTERS);
 
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isPanelActive, setIsPanelActive] = useState(false);
@@ -102,6 +135,7 @@ export default function PurchaseOrders() {
   const [formData, setFormData] = useState(INITIAL_PO_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [createLines, setCreateLines] = useState([]);
+  const [createLineErrors, setCreateLineErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
 
   const [lineForm, setLineForm] = useState(EMPTY_LINE);
@@ -117,12 +151,9 @@ export default function PurchaseOrders() {
     setIsLoading(true);
     setLoadError('');
     try {
-      const response = await fetchPurchaseOrders({
-        page,
-        limit: PAGE_SIZE,
-        search: searchQuery.trim() || undefined,
-        poStatus: statusFilter || undefined,
-      });
+      const response = await fetchPurchaseOrders(
+        buildPoFilterParams(appliedFilters, page, PAGE_SIZE),
+      );
       setPurchaseOrders(response.data || []);
       setPagination(response.pagination || { page: 1, totalPages: 1, total: 0 });
     } catch (error) {
@@ -130,7 +161,7 @@ export default function PurchaseOrders() {
     } finally {
       setIsLoading(false);
     }
-  }, [page, searchQuery, statusFilter]);
+  }, [page, appliedFilters]);
 
   useEffect(() => {
     loadPurchaseOrders();
@@ -151,6 +182,7 @@ export default function PurchaseOrders() {
       setFormData(INITIAL_PO_FORM);
       setFormErrors({});
       setCreateLines([]);
+      setCreateLineErrors({});
       setLineForm(EMPTY_LINE);
       setLineFormMode(null);
       setLineFormErrors({});
@@ -164,6 +196,7 @@ export default function PurchaseOrders() {
     setFormData(INITIAL_PO_FORM);
     setFormErrors({});
     setCreateLines([]);
+    setCreateLineErrors({});
     setIsPanelOpen(true);
   };
 
@@ -221,6 +254,15 @@ export default function PurchaseOrders() {
     if (!formData.soNumber.trim()) errors.soNumber = 'SO number is required';
     if (!formData.poDate) errors.poDate = 'PO date is required';
     if (!formData.clientName.trim()) errors.clientName = 'Client name is required';
+    if (!formData.salesPerson.trim()) errors.salesPerson = 'Sales person is required';
+    if (!formData.contactPerson.trim()) errors.contactPerson = 'Contact person is required';
+    if (!formData.contactPersonEmail.trim()) {
+      errors.contactPersonEmail = 'Contact person email is required';
+    } else if (!isValidEmail(formData.contactPersonEmail)) {
+      errors.contactPersonEmail = 'Enter a valid email address';
+    }
+    if (!formData.paymentTerms.trim()) errors.paymentTerms = 'Payment terms are required';
+    if (!formData.overallPoEta) errors.overallPoEta = 'Overall PO ETA is required';
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -231,18 +273,14 @@ export default function PurchaseOrders() {
       soNumber: formData.soNumber.trim(),
       poDate: toIsoDate(formData.poDate),
       paymentTerms: formData.paymentTerms.trim(),
+      overallPoEta: toIsoDate(formData.overallPoEta),
       clientName: formData.clientName.trim(),
       salesPerson: formData.salesPerson.trim(),
+      contactPerson: formData.contactPerson.trim(),
+      contactPersonEmail: formData.contactPersonEmail.trim(),
       subject: formData.subject.trim(),
       internalNotes: formData.internalNotes.trim(),
     };
-
-    if (formData.plannedPoClosingDate) {
-      payload.plannedPoClosingDate = toIsoDate(formData.plannedPoClosingDate);
-    }
-    if (formData.overallPoEta) {
-      payload.overallPoEta = toIsoDate(formData.overallPoEta);
-    }
 
     if (includeLines && createLines.length > 0) {
       payload.lines = createLines.map(buildLinePayload);
@@ -254,6 +292,22 @@ export default function PurchaseOrders() {
   const handleCreatePo = async (event) => {
     event.preventDefault();
     if (!validatePoForm()) return;
+
+    if (createLines.length > 0) {
+      const nextErrors = {};
+      let hasLineErrors = false;
+
+      createLines.forEach((line, index) => {
+        const errors = validateLineFields(line);
+        if (Object.keys(errors).length > 0) {
+          nextErrors[index] = errors;
+          hasLineErrors = true;
+        }
+      });
+
+      setCreateLineErrors(nextErrors);
+      if (hasLineErrors) return;
+    }
 
     setIsSaving(true);
     try {
@@ -304,16 +358,30 @@ export default function PurchaseOrders() {
     });
   };
 
-  const handleSearch = (event) => {
+  const handleApplyFilters = (event) => {
     event.preventDefault();
     setPage(1);
-    loadPurchaseOrders();
+    setAppliedFilters(filters);
+  };
+
+  const handleResetFilters = () => {
+    setPage(1);
+    setAppliedFilters(INITIAL_PO_FILTERS);
   };
 
   const handleCreateLineChange = (index, field) => (event) => {
     setCreateLines((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], [field]: event.target.value };
+      return next;
+    });
+    setCreateLineErrors((prev) => {
+      if (!prev[index]?.[field]) return prev;
+      const next = { ...prev };
+      next[index] = { ...next[index], [field]: '' };
+      if (Object.values(next[index]).every((value) => !value)) {
+        delete next[index];
+      }
       return next;
     });
   };
@@ -332,12 +400,7 @@ export default function PurchaseOrders() {
   };
 
   const validateLineForm = () => {
-    const errors = {};
-    if (!lineForm.lineNumber) errors.lineNumber = 'Line number is required';
-    if (!lineForm.description.trim()) errors.description = 'Description is required';
-    if (lineForm.quantity === '' || Number(lineForm.quantity) < 0) {
-      errors.quantity = 'Valid quantity is required';
-    }
+    const errors = validateLineFields(lineForm);
     setLineFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -409,43 +472,91 @@ export default function PurchaseOrders() {
     });
   };
 
+  const salesPersonOptions = useMemo(() => {
+    const fromPos = purchaseOrders.map((po) => po.salesPerson).filter(Boolean);
+    return [...new Set([
+      ...SALES_PERSON_OPTIONS,
+      ...fromPos,
+      formData.salesPerson,
+    ].filter(Boolean))].sort();
+  }, [purchaseOrders, formData.salesPerson]);
+
   const renderPoFormFields = () => (
     <div className="po-management__form-grid">
       <div className="po-management__field">
-        <label className="po-management__label" htmlFor="poNumber">PO number</label>
+        <label className="po-management__label" htmlFor="poNumber">PO number *</label>
         <input id="poNumber" className="po-management__input" value={formData.poNumber} onChange={handleFormChange('poNumber')} />
         {formErrors.poNumber && <p className="po-management__error">{formErrors.poNumber}</p>}
       </div>
       <div className="po-management__field">
-        <label className="po-management__label" htmlFor="soNumber">SO number</label>
+        <label className="po-management__label" htmlFor="soNumber">SO number *</label>
         <input id="soNumber" className="po-management__input" value={formData.soNumber} onChange={handleFormChange('soNumber')} />
         {formErrors.soNumber && <p className="po-management__error">{formErrors.soNumber}</p>}
       </div>
       <div className="po-management__field">
-        <label className="po-management__label" htmlFor="poDate">PO date</label>
-        <input id="poDate" type="date" className="po-management__input" value={formData.poDate} onChange={handleFormChange('poDate')} />
-        {formErrors.poDate && <p className="po-management__error">{formErrors.poDate}</p>}
+        <label className="po-management__label" htmlFor="poDate">PO date *</label>
+        <PoDateInput
+          id="poDate"
+          value={formData.poDate}
+          onChange={(nextValue) => {
+            setFormData((prev) => ({ ...prev, poDate: nextValue }));
+            setFormErrors((prev) => ({ ...prev, poDate: '' }));
+          }}
+          error={formErrors.poDate}
+        />
       </div>
       <div className="po-management__field">
-        <label className="po-management__label" htmlFor="clientName">Client name</label>
+        <label className="po-management__label" htmlFor="clientName">Client name *</label>
         <input id="clientName" className="po-management__input" value={formData.clientName} onChange={handleFormChange('clientName')} />
         {formErrors.clientName && <p className="po-management__error">{formErrors.clientName}</p>}
       </div>
       <div className="po-management__field">
-        <label className="po-management__label" htmlFor="salesPerson">Sales person</label>
-        <input id="salesPerson" className="po-management__input" value={formData.salesPerson} onChange={handleFormChange('salesPerson')} />
+        <label className="po-management__label" htmlFor="salesPerson">Sales person *</label>
+        <select
+          id="salesPerson"
+          className="po-management__select"
+          value={formData.salesPerson}
+          onChange={handleFormChange('salesPerson')}
+        >
+          <option value="">Select sales person</option>
+          {salesPersonOptions.map((person) => (
+            <option key={person} value={person}>{person}</option>
+          ))}
+        </select>
+        {formErrors.salesPerson && <p className="po-management__error">{formErrors.salesPerson}</p>}
       </div>
       <div className="po-management__field">
-        <label className="po-management__label" htmlFor="paymentTerms">Payment terms</label>
+        <label className="po-management__label" htmlFor="paymentTerms">Payment terms *</label>
         <input id="paymentTerms" className="po-management__input" value={formData.paymentTerms} onChange={handleFormChange('paymentTerms')} />
+        {formErrors.paymentTerms && <p className="po-management__error">{formErrors.paymentTerms}</p>}
       </div>
       <div className="po-management__field">
-        <label className="po-management__label" htmlFor="plannedPoClosingDate">Planned closing date</label>
-        <input id="plannedPoClosingDate" type="date" className="po-management__input" value={formData.plannedPoClosingDate} onChange={handleFormChange('plannedPoClosingDate')} />
+        <label className="po-management__label" htmlFor="contactPerson">Contact person *</label>
+        <input id="contactPerson" className="po-management__input" value={formData.contactPerson} onChange={handleFormChange('contactPerson')} />
+        {formErrors.contactPerson && <p className="po-management__error">{formErrors.contactPerson}</p>}
       </div>
       <div className="po-management__field">
-        <label className="po-management__label" htmlFor="overallPoEta">Overall PO ETA</label>
-        <input id="overallPoEta" type="date" className="po-management__input" value={formData.overallPoEta} onChange={handleFormChange('overallPoEta')} />
+        <label className="po-management__label" htmlFor="contactPersonEmail">Contact person email *</label>
+        <input
+          id="contactPersonEmail"
+          type="email"
+          className="po-management__input"
+          value={formData.contactPersonEmail}
+          onChange={handleFormChange('contactPersonEmail')}
+        />
+        {formErrors.contactPersonEmail && <p className="po-management__error">{formErrors.contactPersonEmail}</p>}
+      </div>
+      <div className="po-management__field po-management__field--full">
+        <label className="po-management__label" htmlFor="overallPoEta">Overall PO ETA *</label>
+        <PoDateInput
+          id="overallPoEta"
+          value={formData.overallPoEta}
+          onChange={(nextValue) => {
+            setFormData((prev) => ({ ...prev, overallPoEta: nextValue }));
+            setFormErrors((prev) => ({ ...prev, overallPoEta: '' }));
+          }}
+          error={formErrors.overallPoEta}
+        />
       </div>
       <div className="po-management__field po-management__field--full">
         <label className="po-management__label" htmlFor="subject">Subject</label>
@@ -467,7 +578,7 @@ export default function PurchaseOrders() {
   }) => (
     <div className="po-management__line-form-grid">
       <div className="po-management__field">
-        <label className="po-management__label" htmlFor={`${prefix}-lineNumber`}>Line #</label>
+        <label className="po-management__label" htmlFor={`${prefix}-lineNumber`}>Line # *</label>
         <input
           id={`${prefix}-lineNumber`}
           className="po-management__input"
@@ -478,34 +589,59 @@ export default function PurchaseOrders() {
         {errors.lineNumber && <p className="po-management__error">{errors.lineNumber}</p>}
       </div>
       <div className="po-management__field">
-        <label className="po-management__label" htmlFor={`${prefix}-quantity`}>Quantity</label>
+        <label className="po-management__label" htmlFor={`${prefix}-quantity`}>Quantity *</label>
         <input id={`${prefix}-quantity`} type="number" min="0" className="po-management__input" value={line.quantity} onChange={onChange('quantity')} />
         {errors.quantity && <p className="po-management__error">{errors.quantity}</p>}
       </div>
       <div className="po-management__field">
-        <label className="po-management__label" htmlFor={`${prefix}-unitPrice`}>Unit price</label>
+        <label className="po-management__label" htmlFor={`${prefix}-unitPrice`}>Unit price *</label>
         <input id={`${prefix}-unitPrice`} type="number" min="0" step="0.01" className="po-management__input" value={line.unitPrice} onChange={onChange('unitPrice')} />
+        {errors.unitPrice && <p className="po-management__error">{errors.unitPrice}</p>}
       </div>
       <div className="po-management__field">
-        <label className="po-management__label" htmlFor={`${prefix}-status`}>Status</label>
+        <label className="po-management__label" htmlFor={`${prefix}-currency`}>Currency *</label>
+        <select id={`${prefix}-currency`} className="po-management__select" value={line.currency} onChange={onChange('currency')}>
+          {LINE_CURRENCIES.map((currency) => (
+            <option key={currency} value={currency}>{currency}</option>
+          ))}
+        </select>
+        {errors.currency && <p className="po-management__error">{errors.currency}</p>}
+      </div>
+      <div className="po-management__field">
+        <label className="po-management__label" htmlFor={`${prefix}-status`}>Status *</label>
         <select id={`${prefix}-status`} className="po-management__select" value={line.status} onChange={onChange('status')}>
           {LINE_STATUSES.map((status) => (
             <option key={status} value={status}>{status}</option>
           ))}
         </select>
+        {errors.status && <p className="po-management__error">{errors.status}</p>}
       </div>
       <div className="po-management__field po-management__field--full">
         <label className="po-management__label" htmlFor={`${prefix}-description`}>Description</label>
         <input id={`${prefix}-description`} className="po-management__input" value={line.description} onChange={onChange('description')} />
-        {errors.description && <p className="po-management__error">{errors.description}</p>}
       </div>
       <div className="po-management__field">
-        <label className="po-management__label" htmlFor={`${prefix}-eta`}>ETA</label>
-        <input id={`${prefix}-eta`} type="date" className="po-management__input" value={line.eta} onChange={onChange('eta')} />
+        <label className="po-management__label" htmlFor={`${prefix}-eta`}>ETA *</label>
+        <PoDateInput
+          id={`${prefix}-eta`}
+          value={line.eta}
+          onChange={(nextValue) => onChange('eta')({ target: { value: nextValue } })}
+          error={errors.eta}
+        />
       </div>
       <div className="po-management__field">
         <label className="po-management__label" htmlFor={`${prefix}-remarks`}>Internal remarks</label>
         <input id={`${prefix}-remarks`} className="po-management__input" value={line.internalRemarks} onChange={onChange('internalRemarks')} />
+      </div>
+      <div className="po-management__field po-management__field--full">
+        <label className="po-management__label" htmlFor={`${prefix}-shipmentTrackingLink`}>Shipment tracking link (optional)</label>
+        <input
+          id={`${prefix}-shipmentTrackingLink`}
+          className="po-management__input"
+          value={line.shipmentTrackingLink}
+          onChange={onChange('shipmentTrackingLink')}
+          placeholder="Enter tracking link or ID"
+        />
       </div>
     </div>
   );
@@ -534,25 +670,13 @@ export default function PurchaseOrders() {
         )}
       </div>
 
-      <form className="po-management__filters" onSubmit={handleSearch}>
-        <input
-          className="po-management__search"
-          placeholder="Search PO, SO, client, subject..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-        <select
-          className="po-management__select po-management__filter-select"
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-        >
-          <option value="">All statuses</option>
-          {PO_STATUSES.map((status) => (
-            <option key={status} value={status}>{status}</option>
-          ))}
-        </select>
-        <button type="submit" className="po-management__search-btn">Search</button>
-      </form>
+      <PoFilters
+        mode="search"
+        filters={filters}
+        onChange={setFilters}
+        onApply={handleApplyFilters}
+        onReset={handleResetFilters}
+      />
 
       {loadError ? (
         <ServerErrorState message={loadError} onRetry={loadPurchaseOrders} retryLabel="Try again" />
@@ -658,6 +782,7 @@ export default function PurchaseOrders() {
                           prefix: `create-line-${index}`,
                           line,
                           onChange: (field) => handleCreateLineChange(index, field),
+                          errors: createLineErrors[index] || {},
                         })}
                       </div>
                     ))}
@@ -700,10 +825,11 @@ export default function PurchaseOrders() {
                 <div className="po-management__info-grid">
                   <div><span>PO Date</span><strong>{formatPoDate(selectedPo.poDate)}</strong></div>
                   <div><span>Overall ETA</span><strong>{formatPoDate(selectedPo.overallPoEta)}</strong></div>
-                  <div><span>Planned closing</span><strong>{formatPoDate(selectedPo.plannedPoClosingDate)}</strong></div>
                   <div><span>Actual closing</span><strong>{formatPoDate(selectedPo.actualPoClosingDate)}</strong></div>
                   <div><span>Sales person</span><strong>{selectedPo.salesPerson || '—'}</strong></div>
                   <div><span>Payment terms</span><strong>{selectedPo.paymentTerms || '—'}</strong></div>
+                  <div><span>Contact person</span><strong>{selectedPo.contactPerson || '—'}</strong></div>
+                  <div><span>Contact email</span><strong>{selectedPo.contactPersonEmail || '—'}</strong></div>
                   <div className="po-management__info-full"><span>Subject</span><strong>{selectedPo.subject || '—'}</strong></div>
                   <div className="po-management__info-full"><span>Internal notes</span><strong>{selectedPo.internalNotes || '—'}</strong></div>
                 </div>
@@ -749,22 +875,33 @@ export default function PurchaseOrders() {
                             <th>Line #</th>
                             <th>Description</th>
                             <th>Qty</th>
+                            <th>Unit price</th>
+                            <th>Currency</th>
                             <th>Status</th>
                             <th>ETA</th>
+                            <th>Tracking</th>
                             {canEdit && <th>Actions</th>}
                           </tr>
                         </thead>
                         <tbody>
                           {(selectedPo.lines || []).length === 0 ? (
-                            <tr><td colSpan={canEdit ? 6 : 5}>No line items yet.</td></tr>
+                            <tr><td colSpan={canEdit ? 9 : 8}>No line items yet.</td></tr>
                           ) : (
                             selectedPo.lines.map((line) => (
                               <tr key={line._id || line.lineNumber}>
                                 <td>{line.lineNumber}</td>
-                                <td>{line.description}</td>
+                                <td>{line.description || '—'}</td>
                                 <td>{line.quantity}</td>
+                                <td>{line.unitPrice ?? '—'}</td>
+                                <td>{line.currency || '—'}</td>
                                 <td><span className="po-management__badge">{line.status}</span></td>
                                 <td>{formatPoDate(line.eta)}</td>
+                                <td>
+                                  <ShipmentTrackingLink
+                                    value={line.shipmentTrackingLink}
+                                    className="po-management__tracking-link"
+                                  />
+                                </td>
                                 {canEdit && (
                                   <td>
                                     <div className="po-management__actions">

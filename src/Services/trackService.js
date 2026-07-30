@@ -7,3 +7,11 @@ export const trackPurchaseOrder = async (poNumber) => {
   );
   return response.data;
 };
+
+export const subscribeToTrackUpdates = async (poNumber, email) => {
+  const response = await axios.post(
+    `${API_BASE_URL}/api/track/${encodeURIComponent(poNumber.trim())}/subscribe`,
+    { email },
+  );
+  return response.data;
+};

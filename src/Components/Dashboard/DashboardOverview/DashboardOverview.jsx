@@ -60,7 +60,7 @@ const SECONDARY_STATS = [
     key: 'delayedPurchaseOrders',
     totalKey: 'openPurchaseOrders',
     label: 'Delayed POs',
-    sublabel: 'Past planned closing date',
+    sublabel: 'Past overall PO ETA',
     color: '#ef4444',
   },
   {

@@ -1,12 +1,49 @@
+const PO_SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 export function formatPoDate(dateString) {
   if (!dateString) return '—';
 
   const date = new Date(dateString);
-  const day = date.getDate();
-  const month = date.toLocaleString('en-GB', { month: 'long' });
+  if (Number.isNaN(date.getTime())) return '—';
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = PO_SHORT_MONTHS[date.getMonth()];
   const year = date.getFullYear();
 
   return `${day}-${month}-${year}`;
+}
+
+export function parsePoDateInput(value) {
+  if (!value?.trim()) return '';
+
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d{2})-([A-Za-z]{3})-(\d{4})$/);
+
+  if (!match) return null;
+
+  const [, day, monthStr, year] = match;
+  const monthIndex = PO_SHORT_MONTHS.findIndex(
+    (month) => month.toLowerCase() === monthStr.toLowerCase(),
+  );
+
+  if (monthIndex === -1) return null;
+
+  const date = new Date(Number(year), monthIndex, Number(day));
+
+  if (
+    date.getFullYear() !== Number(year)
+    || date.getMonth() !== monthIndex
+    || date.getDate() !== Number(day)
+  ) {
+    return null;
+  }
+
+  return toDateInputValue(date);
+}
+
+export function isValidEmail(value) {
+  if (!value?.trim()) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
 export function formatRelativeActivityTime(dateString) {
@@ -58,7 +95,12 @@ export function toDateInputValue(value) {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toISOString().slice(0, 10);
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
 }
 
 export function toIsoDate(value) {
@@ -80,6 +122,7 @@ export function mapPublicTrackOrder(data) {
     quantity: item.quantity,
     status: item.status,
     eta: item.eta,
+    shipmentTrackingLink: item.shipmentTrackingLink || '',
   }));
 
   return {

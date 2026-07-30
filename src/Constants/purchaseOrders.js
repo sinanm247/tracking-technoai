@@ -19,7 +19,13 @@ export const LINE_STATUSES = [
   'Delivered',
 ];
 
+export const LINE_CURRENCIES = ['AED', 'USD', 'CNY'];
+
 export const PO_STATUSES = ['Open', 'Closed'];
+
+export const SALES_PERSON_OPTIONS = [
+  'TechnoAi Sales',
+];
 
 /**
  * Demo purchase orders — public display fields only.

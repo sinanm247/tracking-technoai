@@ -343,6 +343,16 @@
   color: $dash-text-muted;
 }
 
+.po-management__tracking-link {
+  color: $dash-primary-deep;
+  text-decoration: underline;
+  word-break: break-all;
+
+  &:hover {
+    opacity: 0.85;
+  }
+}
+
 .po-management__state {
   display: flex;
   flex-direction: column;

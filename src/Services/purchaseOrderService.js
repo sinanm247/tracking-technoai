@@ -1,6 +1,13 @@
 import axios from 'axios';
 import { API_BASE_URL, getAuthHeaders } from '../Api/api';
 
+export const fetchPurchaseOrderFilterOptions = async () => {
+  const response = await axios.get(`${API_BASE_URL}/api/purchase-orders/filter-options`, {
+    headers: getAuthHeaders(),
+  });
+  return response.data;
+};
+
 export const fetchPurchaseOrders = async (params = {}) => {
   const response = await axios.get(`${API_BASE_URL}/api/purchase-orders/`, {
     headers: getAuthHeaders(),

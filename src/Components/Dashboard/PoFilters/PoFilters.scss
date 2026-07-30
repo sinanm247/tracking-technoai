@@ -1,0 +1,109 @@
+@use '../../../Styles/dashboard-variables' as *;
+
+.po-filters {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: $dash-surface;
+  border: 1px solid $dash-border;
+  border-radius: $dash-radius;
+  box-shadow: $dash-shadow-sm;
+}
+
+.po-filters__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+
+.po-filters__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+
+  &--checkbox {
+    justify-content: flex-end;
+  }
+}
+
+.po-filters__label {
+  font-size: $dash-font-xs;
+  font-weight: 600;
+  color: $dash-text-muted;
+}
+
+.po-filters__input,
+.po-filters__select {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: $dash-font-sm;
+  color: $dash-text;
+  background: $dash-surface;
+  border: 1px solid $dash-border;
+  border-radius: $dash-radius-sm;
+  outline: none;
+
+  &:focus {
+    border-color: $dash-primary;
+    box-shadow: 0 0 0 3px rgba($dash-primary, 0.15);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.po-filters__checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  font-size: $dash-font-sm;
+  font-weight: 600;
+  color: $dash-text;
+
+  input {
+    width: 16px;
+    height: 16px;
+    accent-color: $dash-primary;
+  }
+}
+
+.po-filters__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.po-filters__reset-btn,
+.po-filters__apply-btn {
+  padding: 9px 16px;
+  font-size: $dash-font-sm;
+  font-weight: 600;
+  border-radius: $dash-radius-sm;
+}
+
+.po-filters__reset-btn {
+  color: $dash-text-muted;
+  background: #eef4f8;
+}
+
+.po-filters__apply-btn {
+  color: $dash-text;
+  background: linear-gradient(135deg, $dash-primary, $dash-primary-dark);
+  box-shadow: 0 4px 14px rgba($dash-primary, 0.25);
+}
+
+@include dash-respond-below(lg) {
+  .po-filters__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@include dash-respond-below(md) {
+  .po-filters__grid {
+    grid-template-columns: 1fr;
+  }
+}
